@@ -18,7 +18,8 @@ contract School is Ownable {
     // }
 
     struct CourseSummary {
-        uint128 numberOfStudents;
+        uint64 blockNumber;
+        uint64 numberOfStudents;
         uint128 totalGrades;
     }
 
@@ -32,10 +33,10 @@ contract School is Ownable {
     mapping(bytes32 => mapping(bytes32 => uint256)) internal _studentGradeData;
 
     /// @dev course to course grade
-    mapping(bytes32 => CourseSummary) internal _courseGradeInfo;
+    // mapping(bytes32 => CourseSummary) internal _courseGradeInfo;
 
-    /// teacher id => courese id => block number
-    mapping(uint256 => mapping (bytes32 => uint256)) internal _teacherLastClaimBlock;
+    /// teacher id => course id => index
+    mapping(uint256 => mapping (bytes32 => uint256)) internal _teacherLastClaimSnapshotIndex;
 
     /// course snapshot
     /// course id => block number => course summary
@@ -71,7 +72,7 @@ contract School is Ownable {
     }
 
     /**
-    * Register stude
+    * Register students
     *
     * @param name student name
     * @param grade student grade out of a 100
@@ -84,19 +85,34 @@ contract School is Ownable {
         /// check if student exists
         require(_studentGradeData[studentId][courseId] == 0, "STUDENT_EXISTS");
 
-        CourseSummary memory courseInfo = _courseGradeInfo[courseId];
+        CourseSummary memory courseInfo = _getLatestCourseSummary(courseId);
+        courseInfo.blockNumber = uint64(block.number);
         courseInfo.numberOfStudents += 1;
         courseInfo.totalGrades += uint128(grade);
 
         // Write to storage
         _studentGradeData[studentId][courseId] = grade;
-        _courseGradeInfo[courseId] = courseInfo;
+        _updateCourseSummarySnapshot(courseId, courseInfo);
         
-        // Take Snapshots here
-        // _courseSummarySnapshots[courseId][block.number] = courseInfo;
         emit NewStudent(studentId, courseId, grade);
     }
 
+    function _updateCourseSummarySnapshot(bytes32 courseId, CourseSummary memory info) internal {
+        uint256 size = _courseSummarySnapshots[courseId].length;
+        // multiple snapshots within a block
+        if(size > 0 && _courseSummarySnapshots[courseId][size - 1].blockNumber == block.number) {
+            _courseSummarySnapshots[courseId][size - 1] = info;
+        } else {
+            _courseSummarySnapshots[courseId].push(info);
+        }
+    }
+
+    function _getLatestCourseSummary(bytes32 courseId) internal view returns (CourseSummary memory info) {
+        uint256 size = _courseSummarySnapshots[courseId].length;
+        if (size > 0) {
+            info = _courseSummarySnapshots[courseId][size - 1];
+        }
+    }
     /**
     * Change student course
     *
@@ -110,13 +126,13 @@ contract School is Ownable {
         uint256 studentCurrentGrade = _studentGradeData[studentId][oldCourseId];
         require(studentCurrentGrade > 0, "STUDENT_NOT_EXISTS");
         
-        CourseSummary memory oldCourseInfo = _courseGradeInfo[oldCourseId];
+        CourseSummary memory oldCourseInfo = _getLatestCourseSummary(oldCourseId);
+        oldCourseInfo.blockNumber = uint64(block.number);
         oldCourseInfo.numberOfStudents -= 1;
         oldCourseInfo.totalGrades -= uint128(studentCurrentGrade);
-        
-        // @TODO take snapshot here
 
-        CourseSummary memory newCourseInfo = _courseGradeInfo[newCourseId];
+        CourseSummary memory newCourseInfo = _getLatestCourseSummary(newCourseId);
+        newCourseInfo.blockNumber = uint64(block.number);
         newCourseInfo.numberOfStudents += 1;
         newCourseInfo.totalGrades += uint128(newGrade);
 
@@ -126,18 +142,15 @@ contract School is Ownable {
 
         // Write to storage
         _studentGradeData[studentId][newCourseId] = newGrade;
-        _courseGradeInfo[oldCourseId] = oldCourseInfo;
-        _courseGradeInfo[newCourseId] = newCourseInfo;
+        _updateCourseSummarySnapshot(oldCourseId, oldCourseInfo);
+        _updateCourseSummarySnapshot(newCourseId, newCourseInfo);
 
         emit TransferredStudent(studentId, oldCourseId, newCourseId, newGrade);
     }
 
 
     /**
-    *
-    *
-    *
-    *
+    * bulkChangeCourse change course in bulk
     */
     function bulkChangeCourse(bytes32 oldCourseId, bytes32 newCourseId, bytes32[] calldata studentIds, uint256[] calldata grades ) external onlyOwner {
         require(studentIds.length == grades.length, "INVALID_LENGTH");
@@ -149,12 +162,18 @@ contract School is Ownable {
     }
     
     function getSalary(uint256 teacherId, uint256 courseId) external {
-
+        // @TODO loop through the course summary snaphosts and evaluate the teacher salary
+        // based of it
+        // We can cap the size of the loop to a reasonable limit such that even if a teacher 
+        // doesn't claim their salary for a long period of time they are still able to 
+        // withdraw their funds gradually.
     }
 
     function getCourseAverageGrade(bytes32 courseId) external view returns(uint256 averageGrade) {
-        CourseSummary memory oldCourseInfo = _courseGradeInfo[courseId];
-        averageGrade = oldCourseInfo.totalGrades / oldCourseInfo.numberOfStudents;
+        CourseSummary memory oldCourseInfo = _getLatestCourseSummary(courseId);
+        if (oldCourseInfo.numberOfStudents > 0) {
+            averageGrade = oldCourseInfo.totalGrades / oldCourseInfo.numberOfStudents;
+        }
     }
 
     /**
@@ -167,7 +186,7 @@ contract School is Ownable {
         uint256 size = courses.length;
         
         for (uint256 i = 0; i < size; i++) {
-            total += _courseGradeInfo[courses[i]].numberOfStudents;
+            total += _getLatestCourseSummary(courses[i]).numberOfStudents;
         }
     }
 
@@ -179,12 +198,14 @@ contract School is Ownable {
         uint256 totalGrades;
 
         for (uint256 i = 0; i < size; i++) {
-            CourseSummary memory course = _courseGradeInfo[courses[i]];
+            CourseSummary memory course = _getLatestCourseSummary(courses[i]);
             totalNumberOfStudents += course.numberOfStudents;
             totalGrades += course.totalGrades;
         }
 
-        averageGrade = totalGrades / totalNumberOfStudents;
+        if (totalNumberOfStudents > 0) {
+            averageGrade = totalGrades / totalNumberOfStudents;
+        }
     }
 
     /**
