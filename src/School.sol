@@ -11,12 +11,6 @@ contract School is Ownable {
     /// @dev teacher salary per second
     uint256 constant public TEACHER_SALARY_PER_BLOCK = 1;
 
-    // /// @dev teacher 
-    // struct Course {
-    //     uint256 numberOfStudents;
-    //     uint256[] teacherIds;
-    // }
-
     struct CourseSummary {
         uint64 blockNumber;
         uint64 numberOfStudents;
@@ -31,9 +25,6 @@ contract School is Ownable {
 
     /// @dev student id => course id => grade
     mapping(bytes32 => mapping(bytes32 => uint256)) internal _studentGradeData;
-
-    /// @dev course to course grade
-    // mapping(bytes32 => CourseSummary) internal _courseGradeInfo;
 
     /// teacher id => course id => index
     mapping(uint256 => mapping (bytes32 => uint256)) internal _teacherLastClaimSnapshotIndex;
@@ -93,7 +84,7 @@ contract School is Ownable {
         // Write to storage
         _studentGradeData[studentId][courseId] = grade;
         _updateCourseSummarySnapshot(courseId, courseInfo);
-        
+
         emit NewStudent(studentId, courseId, grade);
     }
 
@@ -135,8 +126,6 @@ contract School is Ownable {
         newCourseInfo.blockNumber = uint64(block.number);
         newCourseInfo.numberOfStudents += 1;
         newCourseInfo.totalGrades += uint128(newGrade);
-
-        // @TODO take snapshot here
 
         delete _studentGradeData[studentId][oldCourseId];
 
