@@ -113,7 +113,6 @@ contract School is Ownable {
     * @param newGrade new grade 
     */
     function changeCourse(bytes32 studentId, bytes32 oldCourseId, bytes32 newCourseId, uint256 newGrade) public onlyOwner {
-        // @TODO check if the student is already registered to change course
         uint256 studentCurrentGrade = _studentGradeData[studentId][oldCourseId];
         require(studentCurrentGrade > 0, "STUDENT_NOT_EXISTS");
         
