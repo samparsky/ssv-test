@@ -12,8 +12,6 @@ Since the teacher salary is based on per block basis and the number of students 
 
 -  We are following a lazy approach of evaluating the teacher salary it's possible when the teacher wants to claim there will be high gas cost depending on when last they claimed their salary. This is because we would have to loop through the pending snapshots to evaluate the user salary.
 
-- 
-
 
 ## Gas Report
 
