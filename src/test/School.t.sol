@@ -29,11 +29,11 @@ contract ContractTest is DSTest {
         testRegisterStudent();
         bytes32 studentId = keccak256(abi.encode("father"));
         bytes32 oldCourseId = keccak256(abi.encode("math"));
-        bytes32 newCourseId = keccak256(abi.encode("biolody"));
+        bytes32 newCourseId = keccak256(abi.encode("biology"));
         testSchool.changeCourse(studentId, oldCourseId, newCourseId, 5);
 
-        testSchool.getCourseAverageGrade(newCourseId);
-        testSchool.getTeacherStudentCount(1);
-        testSchool.getTeacherAverageStudentGrade(1);
+        assertEq(testSchool.getCourseAverageGrade(newCourseId), 5);
+        assertEq(testSchool.getTeacherStudentCount(1), 1);
+        assertEq(testSchool.getTeacherAverageStudentGrade(1), 5);
     }
 }
